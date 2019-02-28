@@ -95,8 +95,13 @@ public final class CalledLegacySegmentCollection extends AbstractSampleLocatable
     @Override
     public void write(final File outputFile) {
         Utils.nonNull(outputFile);
+<<<<<<< HEAD
         try (final RecordWriter recordWriter = new RecordWriter(new FileWriter(outputFile))) {
             recordWriter.writeAllRecords(getRecords());
+=======
+        try (final RecordCollectionWriter writer = new RecordCollectionWriter(new FileWriter(outputFile))) {
+            writer.writeAllRecords(getRecords());
+>>>>>>> 707baea0c... minor typos
         } catch (final IOException e) {
             throw new UserException.CouldNotCreateOutputFile(outputFile, e);
         }
