@@ -4,6 +4,7 @@ import com.google.common.primitives.Doubles;
 import htsjdk.variant.variantcontext.Allele;
 import htsjdk.variant.variantcontext.GenotypesContext;
 import htsjdk.variant.variantcontext.VariantContext;
+import htsjdk.variant.vcf.VCFConstants;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -196,6 +197,7 @@ public abstract class AS_RankSumTest extends RankSumTest implements ReducibleAnn
         }
         final String annotationString = makeReducedAnnotationString(vc, perAltRankSumResults);
         annotations.put(getKeyNames().get(0), annotationString);
+        annotations.put(getRawKeyName(), makeCombinedAnnotationString(vc.getAlleles(), myData.getAttributeMap()));
         return annotations;
     }
 
@@ -284,18 +286,21 @@ public abstract class AS_RankSumTest extends RankSumTest implements ReducibleAnn
     }
 
     private String makeReducedAnnotationString(final VariantContext vc, final Map<Allele,Double> perAltRankSumResults) {
-        String annotationString = "";
+        final StringBuilder annotationString = new StringBuilder();
         for (final Allele a : vc.getAlternateAlleles()) {
-            if (!annotationString.isEmpty()) {
-                annotationString += AnnotationUtils.ALLELE_SPECIFIC_REDUCED_DELIM;
+            if (!(annotationString.length() == 0)) {
+                annotationString.append(AnnotationUtils.ALLELE_SPECIFIC_REDUCED_DELIM);
             }
             if (!perAltRankSumResults.containsKey(a)) {
-                logger.warn("ERROR: VC allele not found in annotation alleles -- maybe there was trimming?");
+                logger.warn("VC allele not found in annotation alleles -- maybe there was trimming?  Allele " + a.getDisplayString() + " will be marked as missing.");
+                annotationString.append(VCFConstants.MISSING_VALUE_v4); //add the missing value or the array size and indexes won't check out
             } else {
-                annotationString += String.format("%.3f", perAltRankSumResults.get(a));
+                final Double numericAlleleValue = perAltRankSumResults.get(a);
+                final String perAlleleValue = numericAlleleValue != null ? String.format("%.3f", numericAlleleValue) : VCFConstants.MISSING_VALUE_v4;
+                annotationString.append(perAlleleValue);
             }
         }
-        return annotationString;
+        return annotationString.toString();
     }
 
     protected String makeCombinedAnnotationString(final List<Allele> vcAlleles, final Map<Allele, Histogram> perAlleleValues) {
