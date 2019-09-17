@@ -211,8 +211,9 @@ public final class GermlineCNVCaller extends CommandLineProgram {
             doc = "Input paths for read-count files containing integer read counts in genomic intervals for all samples.  " +
                     "All intervals specified via -L/-XL must be contained; " +
                     "if none are specified, then intervals must be identical and in the same order for all samples.  " +
-                    "If read-count files are given by GCS paths, have the extension .counts.tsv, and have been indexed, " +
-                    "only the specified intervals will be queried.",
+                    "If read-count files are given by Google Cloud Storage paths, have the extension .counts.tsv, and have been indexed, " +
+                    "only the specified intervals will be queried; this can reduce disk usage by avoiding the localization of " +
+                    "all read-count files.",
             fullName = StandardArgumentDefinitions.INPUT_LONG_NAME,
             shortName = StandardArgumentDefinitions.INPUT_SHORT_NAME,
             minElements = 1
@@ -388,7 +389,6 @@ public final class GermlineCNVCaller extends CommandLineProgram {
         final Set<SimpleInterval> intervalSubset = new HashSet<>(specifiedIntervals.getRecords());
         final List<SimpleInterval> mergedIntervalSubset = IntervalUtils.getIntervalsWithFlanks(
                 specifiedIntervals.getRecords(), 0, specifiedIntervals.getMetadata().getSequenceDictionary());
-        final SAMTextHeaderCodec samTextHeaderCodec = new SAMTextHeaderCodec();
 
         final ListIterator<String> inputReadCountPathsIterator = inputReadCountPaths.listIterator();
         while (inputReadCountPathsIterator.hasNext()) {
@@ -397,31 +397,13 @@ public final class GermlineCNVCaller extends CommandLineProgram {
             logger.info(String.format("Aggregating read-count file %s (%d / %d)",
                     inputReadCountPath, sampleIndex + 1, numSamples));
 
-            final SampleLocatableMetadata metadata;
-            final List<SimpleCount> subsetReadCounts;
-            if (BucketUtils.isCloudStorageUrl(inputReadCountPath)) {
-                final FeatureDataSource<SimpleCount> readCounts = new FeatureDataSource<>(
-                        inputReadCountPath,
-                        inputReadCountPath,
-                        1_000_000,
-                        SimpleCount.class,
-                        ConfigFactory.getInstance().getGATKConfig().cloudPrefetchBuffer(),
-                        ConfigFactory.getInstance().getGATKConfig().cloudIndexPrefetchBuffer());
-                readCounts.setIntervalsForTraversal(mergedIntervalSubset);
-                final BufferedLineReader reader = new BufferedLineReader(BucketUtils.openFile(inputReadCountPath));
-                final SAMFileHeader header = samTextHeaderCodec.decode(reader, inputReadCountPath);
-                metadata = MetadataUtils.fromHeader(header, Metadata.Type.SAMPLE_LOCATABLE);
-                subsetReadCounts = Lists.newArrayList(readCounts.iterator());
-            } else {
-                final SimpleCountCollection readCounts = SimpleCountCollection.read(new File(inputReadCountPath));
-                metadata = readCounts.getMetadata();
-                subsetReadCounts = readCounts.getRecords().stream()
-                        .filter(c -> intervalSubset.contains(c.getInterval()))
-                        .collect(Collectors.toList());
-            }
+            final SimpleCountCollection subsetReadCounts = BucketUtils.isCloudStorageUrl(inputReadCountPath)
+                    ? SimpleCountCollection.readSubset(inputReadCountPath, mergedIntervalSubset)
+                    : SimpleCountCollection.readSubset(new File(inputReadCountPath), mergedIntervalSubset);
 
             if (!CopyNumberArgumentValidationUtils.isSameDictionary(
-                    metadata.getSequenceDictionary(), specifiedIntervals.getMetadata().getSequenceDictionary())) {
+                    subsetReadCounts.getMetadata().getSequenceDictionary(),
+                    specifiedIntervals.getMetadata().getSequenceDictionary())) {
                 logger.warn("Sequence dictionary for read-count file %s does not match that " +
                         "in other read-count files.", inputReadCountPath);
             }
@@ -429,7 +411,7 @@ public final class GermlineCNVCaller extends CommandLineProgram {
                     String.format("Intervals for read-count file %s do not contain all specified intervals.",
                             inputReadCountPath));
             final File intervalSubsetReadCountFile = IOUtils.createTempFile("sample-" + sampleIndex, ".tsv");
-            new SimpleCountCollection(metadata, subsetReadCounts).write(intervalSubsetReadCountFile);
+            subsetReadCounts.write(intervalSubsetReadCountFile);
             intervalSubsetReadCountFiles.add(intervalSubsetReadCountFile);
         }
         return intervalSubsetReadCountFiles;
