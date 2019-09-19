@@ -165,7 +165,7 @@ public abstract class AS_StrandBiasTest extends StrandBiasTest implements Reduci
         String rawAnnotationsString = makeRawAnnotationString(vc.getAlleles(), myData.getAttributeMap());
         Map<String, Object> returnMap = new HashMap<>();
         returnMap.put(getKeyNames().get(0), annotationString);
-        returnMap.put(getRawKeyName(), rawAnnotationsString);
+        returnMap.put(getRawKeyName(), rawAnnotationsString);  //this
         return returnMap;
     }
 

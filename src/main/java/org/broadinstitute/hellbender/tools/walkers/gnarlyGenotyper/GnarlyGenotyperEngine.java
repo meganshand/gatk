@@ -198,6 +198,8 @@ public final class GnarlyGenotyperEngine {
             annotationDBBuilder.noGenotypes();
         }
 
+        //Because AS_StrandBias annotations both use and return the raw key
+        final Map<String, Object> annotationsToBeModified = variant.getAttributes();
         for (final Class c : allASAnnotations) {
             try {
                 final InfoFieldAnnotation annotation = (InfoFieldAnnotation) c.getDeclaredConstructor().newInstance();
@@ -205,8 +207,9 @@ public final class GnarlyGenotyperEngine {
                     final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
                     if (variant.hasAttribute(ann.getRawKeyName())) {
                         if (!stripASAnnotations) {
+                            //here we've already stripped the non-ref
                             final Map<String, Object> finalValue = ann.finalizeRawData(vcfBuilder.make(), variant);
-                            finalValue.forEach((key, value) -> vcfBuilder.attribute(key, value));
+                            finalValue.forEach((key, value) -> annotationsToBeModified.put(key, value));
                             if (annotationDBBuilder != null) {
                                 annotationDBBuilder.attribute(ann.getRawKeyName(), variant.getAttribute(ann.getRawKeyName()));
                             }
@@ -244,6 +247,8 @@ public final class GnarlyGenotyperEngine {
         if (annotationDBBuilder != null) {
             annotationDBBuilder.alleles(targetAlleles);
         }
+
+        vcfBuilder.attributes(annotationsToBeModified);
 
         //instead of annotationDBBuilder.make(), we modify the builder passed in (if non-null)
         return vcfBuilder.make();
@@ -313,6 +318,7 @@ public final class GnarlyGenotyperEngine {
                     makeGenotypeCall(genotypeBuilder, GenotypeLikelihoods.fromPLs(PLs).getAsVector(), targetAlleles);
                 }
             }
+            //TODO: trim AS annotations here?
             final Map<String, Object> attrs = new HashMap<>(g.getExtendedAttributes());
             attrs.remove(GATKVCFConstants.MIN_DP_FORMAT_KEY);
             //attrs.remove(GATKVCFConstants.STRAND_BIAS_BY_SAMPLE_KEY);
