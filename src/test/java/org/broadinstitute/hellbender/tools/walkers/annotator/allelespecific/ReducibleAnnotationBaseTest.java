@@ -50,6 +50,7 @@ public abstract class ReducibleAnnotationBaseTest extends GATKBaseTest {
             // these are hand picked sites from the allele specific unit tests for combinegvcfs that triggered a combine in GATK3
             Integer[] interestingLocs = {10087820, 10433312, 10433322, 10433324, 10433326, 10433328, 10433382, 10433391, 10433468, 10433560, 10433575, 10433594, 10433955,
                     10434177, 10434384, 10435067, 10434258, 10436227, 10684106};
+
             List<SimpleInterval> intervals = Arrays.stream(interestingLocs).map(m -> new SimpleInterval("20", m, m)).collect(Collectors.toList());
             for (SimpleInterval loc : intervals) {
                 VariantContext a = vcfA.query(loc).next();
@@ -85,7 +86,7 @@ public abstract class ReducibleAnnotationBaseTest extends GATKBaseTest {
 
     // NOTE: this code is mimicking the behavior of GATK3 combineGVCFS insofar as it is important for the annotations
     @Test(dataProvider = "interestingSitesCombineResults")
-    public void testCombineAnnotationGATK3Concordance(List<VariantContext> VCs, VariantContext result, VariantContext genotyped) throws Exception {
+    public void testCombineAnnotationAgainstExpected(List<VariantContext> VCs, VariantContext result, VariantContext genotyped) throws Exception {
         VariantAnnotatorEngine annotatorEngine = new VariantAnnotatorEngine(getAnnotationsToUse(), null, Collections.emptyList(), false, false);
         ReferenceConfidenceVariantContextMerger merger = new ReferenceConfidenceVariantContextMerger(annotatorEngine, new VCFHeader());
         VariantContext merged = merger.merge(VCs, new SimpleInterval(result.getContig(), result.getStart(), result.getStart()), result.getReference().getBases()[0], false, false);
@@ -94,7 +95,7 @@ public abstract class ReducibleAnnotationBaseTest extends GATKBaseTest {
 
     // NOTE: this code is mimicking the behavior of GATK3 GenotypeGVCFs
     @Test(dataProvider = "interestingSitesCombineResults")
-    public void testFinalizeAnnotationGATK3Concordance(List<VariantContext> VCs, VariantContext result, VariantContext genotyped) throws Exception {
+    public void testFinalizeAnnotationAgainstExpected(List<VariantContext> VCs, VariantContext result, VariantContext genotyped) throws Exception {
         if (result == null || genotyped == null) {
             return;
         }

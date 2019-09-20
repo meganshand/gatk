@@ -7,6 +7,7 @@ import htsjdk.variant.vcf.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.broadinstitute.hellbender.exceptions.UserException;
+import org.broadinstitute.hellbender.tools.walkers.ReferenceConfidenceVariantContextMerger;
 import org.broadinstitute.hellbender.tools.walkers.annotator.*;
 import org.broadinstitute.hellbender.tools.walkers.annotator.allelespecific.*;
 import org.broadinstitute.hellbender.tools.walkers.genotyper.*;
@@ -105,7 +106,34 @@ public final class GnarlyGenotyperEngine {
 
         //GenomicsDB merged all the annotations, but we still need to finalize MQ and QD annotations
         //vcfBuilder gets the finalized annotations and annotationDBBuilder (if present) gets the raw annotations for the database
-        final VariantContextBuilder vcfBuilder = new VariantContextBuilder(mqCalculator.finalizeRawMQ(variant));
+        final VariantContext vcWithMQ = mqCalculator.finalizeRawMQ(variant);
+        final VariantContextBuilder vcfBuilder = new VariantContextBuilder(vcWithMQ);
+
+        //Because AS_StrandBias annotations both use and return the raw key
+        final Map<String, Object> annotationsToBeModified = new HashMap<>(vcWithMQ.getAttributes());
+        for (final Class c : allASAnnotations) {
+            try {
+                final InfoFieldAnnotation annotation = (InfoFieldAnnotation) c.getDeclaredConstructor().newInstance();
+                if (annotation instanceof AS_StandardAnnotation && annotation instanceof ReducibleAnnotation) {
+                    final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
+                    if (variant.hasAttribute(ann.getRawKeyName())) {
+                        if (!stripASAnnotations) {
+                            //here we've already stripped the non-ref
+                            final Map<String, Object> finalValue = ann.finalizeRawData(vcfBuilder.make(), variant);
+                            finalValue.forEach((key, value) -> annotationsToBeModified.put(key, value));
+                            if (annotationDBBuilder != null) {
+                                annotationDBBuilder.attribute(ann.getRawKeyName(), variant.getAttribute(ann.getRawKeyName()));
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception e) {
+                //if (e instanceof UnsupporedOperationException)
+                throw new IllegalStateException("Something went wrong: ", e);
+            }
+        }
+        vcfBuilder.attributes(annotationsToBeModified);
 
         final int variantDP = variant.getAttributeAsInt(GATKVCFConstants.VARIANT_DEPTH_KEY, 0);
         final double QD = QUALapprox / (double)variantDP;
@@ -190,7 +218,7 @@ public final class GnarlyGenotyperEngine {
 
         vcfBuilder.attribute(GATKVCFConstants.FISHER_STRAND_KEY, FisherStrand.makeValueObjectForAnnotation(FisherStrand.pValueForContingencyTable(StrandBiasTest.decodeSBBS(SBsum))));
         vcfBuilder.attribute(GATKVCFConstants.STRAND_ODDS_RATIO_KEY, StrandOddsRatio.formattedValue(StrandOddsRatio.calculateSOR(StrandBiasTest.decodeSBBS(SBsum))));
-        vcfBuilder.alleles(targetAlleles);
+        //vcfBuilder.alleles(targetAlleles);
         vcfBuilder.genotypes(calledGenotypes);
 
         if (annotationDBBuilder != null) {
@@ -198,43 +226,25 @@ public final class GnarlyGenotyperEngine {
             annotationDBBuilder.noGenotypes();
         }
 
-        //Because AS_StrandBias annotations both use and return the raw key
-        final Map<String, Object> annotationsToBeModified = variant.getAttributes();
+
+        //since AS_FS and AS_SOR share the same raw key, we have to wait to remove raw keys until all the finalized values are added
         for (final Class c : allASAnnotations) {
             try {
                 final InfoFieldAnnotation annotation = (InfoFieldAnnotation) c.getDeclaredConstructor().newInstance();
                 if (annotation instanceof AS_StandardAnnotation && annotation instanceof ReducibleAnnotation) {
                     final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
+                    //trim NON_REF out of AS values
                     if (variant.hasAttribute(ann.getRawKeyName())) {
-                        if (!stripASAnnotations) {
-                            //here we've already stripped the non-ref
-                            final Map<String, Object> finalValue = ann.finalizeRawData(vcfBuilder.make(), variant);
-                            finalValue.forEach((key, value) -> annotationsToBeModified.put(key, value));
-                            if (annotationDBBuilder != null) {
-                                annotationDBBuilder.attribute(ann.getRawKeyName(), variant.getAttribute(ann.getRawKeyName()));
-                            }
-                        }
+                        vcfBuilder.attribute(annotation.getKeyNames().get(0), trimASAnnotation(vcfBuilder.make(), targetAlleles, annotation.getKeyNames().get(0)));
                     }
-                }
-            }
-            catch (final Exception e) {
-                throw new IllegalStateException("Something went wrong: ", e);
-            }
-        }
-        //since AS_FS and AS_SOR share the same raw key, we have to wait to remove raw keys until all the finalized values are added
-        if (!keepAllSites) {
-            for (final Class c : allASAnnotations) {
-                try {
-                    final InfoFieldAnnotation annotation = (InfoFieldAnnotation) c.getDeclaredConstructor().newInstance();
-                    if (annotation instanceof AS_StandardAnnotation && annotation instanceof ReducibleAnnotation) {
-                        final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
+                    if (!keepAllSites) {
                         if (variant.hasAttribute(ann.getRawKeyName())) {
                             vcfBuilder.rmAttribute(ann.getRawKeyName());
                         }
                     }
-                } catch (final Exception e) {
-                    throw new IllegalStateException("Something went wrong: ", e);
                 }
+            } catch (final Exception e) {
+                throw new IllegalStateException("Something went wrong: ", e);
             }
         }
         if (variant.hasAttribute(GATKVCFConstants.AS_VARIANT_DEPTH_KEY)) {
@@ -248,7 +258,7 @@ public final class GnarlyGenotyperEngine {
             annotationDBBuilder.alleles(targetAlleles);
         }
 
-        vcfBuilder.attributes(annotationsToBeModified);
+        vcfBuilder.alleles(targetAlleles);
 
         //instead of annotationDBBuilder.make(), we modify the builder passed in (if non-null)
         return vcfBuilder.make();
@@ -514,6 +524,26 @@ public final class GnarlyGenotyperEngine {
         final int[] newADs = new int[newAlleleNumber];
         System.arraycopy(oldADs, 0, newADs, 0, newAlleleNumber);
         return newADs;
+    }
+
+    private static String trimASAnnotation(final VariantContext variant, final List<Allele> targetAlleles, final String key) {
+        final int[] relevantIndices = targetAlleles.stream().filter(a -> !a.isReference()).mapToInt(a -> variant.getAlternateAlleles().indexOf(a)).toArray();
+        if (!variant.hasAttribute(key)) {
+            return null;
+        }
+        final List<String> annotationEntries = AnnotationUtils.decodeAnyASList(variant.getAttribute(key).toString());
+        if (annotationEntries == null) {
+            return null;
+        }
+        final List returnString = new ArrayList();
+        for (int i = 0; i < relevantIndices.length; i++) {
+            if (relevantIndices[i] <= annotationEntries.size()-1) {
+                returnString.add(annotationEntries.get(relevantIndices[i]));
+            } else {
+                returnString.add(VCFConstants.MISSING_VALUE_v4);
+            }
+        }
+        return AnnotationUtils.encodeStringList(returnString);
     }
 
      /**

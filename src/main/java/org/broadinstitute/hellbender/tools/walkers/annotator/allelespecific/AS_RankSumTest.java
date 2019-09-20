@@ -176,7 +176,7 @@ public abstract class AS_RankSumTest extends RankSumTest implements ReducibleAnn
      *
      * @param vc -- contains the final set of alleles, possibly subset by GenotypeGVCFs
      * @param originalVC -- used to get all the alleles for all gVCFs
-     * @return
+     * @return the finalized key and value as well as the raw key and value
      */
     public  Map<String, Object> finalizeRawData(final VariantContext vc, final VariantContext originalVC) {
         if (!vc.hasAttribute(getRawKeyName())) {
