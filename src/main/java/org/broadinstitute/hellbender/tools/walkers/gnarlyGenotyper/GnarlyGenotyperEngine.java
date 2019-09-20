@@ -535,7 +535,7 @@ public final class GnarlyGenotyperEngine {
         if (annotationEntries == null) {
             return null;
         }
-        final List returnString = new ArrayList();
+        final List<String> returnString = new ArrayList<>();
         for (int i = 0; i < relevantIndices.length; i++) {
             if (relevantIndices[i] <= annotationEntries.size()-1) {
                 returnString.add(annotationEntries.get(relevantIndices[i]));
