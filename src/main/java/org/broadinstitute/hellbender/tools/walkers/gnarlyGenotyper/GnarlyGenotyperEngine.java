@@ -116,13 +116,13 @@ public final class GnarlyGenotyperEngine {
                 final InfoFieldAnnotation annotation = (InfoFieldAnnotation) c.getDeclaredConstructor().newInstance();
                 if (annotation instanceof AS_StandardAnnotation && annotation instanceof ReducibleAnnotation) {
                     final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
-                    if (variant.hasAttribute(ann.getRawKeyName())) {
+                    if (variant.hasAttribute(ann.getRawKeyNames().get(0))) {
                         if (!stripASAnnotations) {
                             //here we've already stripped the non-ref
                             final Map<String, Object> finalValue = ann.finalizeRawData(vcfBuilder.make(), variant);
                             finalValue.forEach((key, value) -> annotationsToBeModified.put(key, value));
                             if (annotationDBBuilder != null) {
-                                annotationDBBuilder.attribute(ann.getRawKeyName(), variant.getAttribute(ann.getRawKeyName()));
+                                annotationDBBuilder.attribute(ann.getRawKeyNames().get(0), variant.getAttribute(ann.getRawKeyNames().get(0)));
                             }
                         }
                     }
@@ -234,12 +234,12 @@ public final class GnarlyGenotyperEngine {
                 if (annotation instanceof AS_StandardAnnotation && annotation instanceof ReducibleAnnotation) {
                     final ReducibleAnnotation ann = (ReducibleAnnotation) annotation;
                     //trim NON_REF out of AS values
-                    if (variant.hasAttribute(ann.getRawKeyName())) {
+                    if (variant.hasAttribute(ann.getRawKeyNames().get(0))) {
                         vcfBuilder.attribute(annotation.getKeyNames().get(0), trimASAnnotation(vcfBuilder.make(), targetAlleles, annotation.getKeyNames().get(0)));
                     }
                     if (!keepAllSites) {
-                        if (variant.hasAttribute(ann.getRawKeyName())) {
-                            vcfBuilder.rmAttribute(ann.getRawKeyName());
+                        if (variant.hasAttribute(ann.getRawKeyNames().get(0))) {
+                            vcfBuilder.rmAttribute(ann.getRawKeyNames().get(0));
                         }
                     }
                 }

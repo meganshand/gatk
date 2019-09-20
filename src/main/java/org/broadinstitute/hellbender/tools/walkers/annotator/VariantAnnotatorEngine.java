@@ -76,7 +76,8 @@ public final class VariantAnnotatorEngine {
         keepRawCombinedAnnotations = keepCombined;
         for (InfoFieldAnnotation annot : infoAnnotations) {
             if (annot instanceof ReducibleAnnotation) {
-                reducibleKeys.add(((ReducibleAnnotation) annot).getRawKeyName());
+                for (final String rawKey : ((ReducibleAnnotation) annot).getRawKeyNames())
+                reducibleKeys.add(rawKey);
             }
         }
     }
@@ -199,12 +200,16 @@ public final class VariantAnnotatorEngine {
         for (final InfoFieldAnnotation annotationType : infoAnnotations) {
             if (annotationType instanceof ReducibleAnnotation) {
                 ReducibleAnnotation currentASannotation = (ReducibleAnnotation) annotationType;
-                if (annotationMap.containsKey(currentASannotation.getRawKeyName())) {
-                    final List<ReducibleAnnotationData<?>> annotationValue = (List<ReducibleAnnotationData<?>>) annotationMap.get(currentASannotation.getRawKeyName());
-                    final Map<String, Object> annotationsFromCurrentType = currentASannotation.combineRawData(allelesList, annotationValue);
-                    combinedAnnotations.putAll(annotationsFromCurrentType);
-                    //remove the combined annotations so that the next method only processes the non-reducible ones
-                    annotationMap.remove(currentASannotation.getRawKeyName());
+                for (final String rawKey : currentASannotation.getRawKeyNames()) {
+                    if (annotationMap.containsKey(rawKey)) {
+                        final List<ReducibleAnnotationData<?>> annotationValue = (List<ReducibleAnnotationData<?>>) annotationMap.get(currentASannotation.getRawKeyNames().get(0));
+                        final Map<String, Object> annotationsFromCurrentType = currentASannotation.combineRawData(allelesList, annotationValue);
+                        combinedAnnotations.putAll(annotationsFromCurrentType);
+                        //remove all the raw keys for the annotation because we already used all of them in combineRawData
+                        for (final String rk : currentASannotation.getRawKeyNames()) {
+                            annotationMap.remove(rk);
+                        }
+                    }
                 }
             }
         }
@@ -231,12 +236,14 @@ public final class VariantAnnotatorEngine {
                     variantAnnotations.putAll(annotationsFromCurrentType);
                 }
                 //clean up raw annotation data after annotations are finalized
-                if (!keepRawCombinedAnnotations) {
-                    variantAnnotations.remove(currentASannotation.getRawKeyName());
+                for (final String rawKey: currentASannotation.getRawKeyNames()) {
+                    if (!keepRawCombinedAnnotations) {
+                        variantAnnotations.remove(rawKey);
+                    }
                 }
             }
         }
-        //until we refactor the allele-specific annotations to have multiple raw keys, we'll do this one manually
+        //this is manual because the "rawKeys" get added by genotyping
         if (!keepRawCombinedAnnotations) {
             variantAnnotations.remove(GATKVCFConstants.AS_QUAL_KEY);
         }

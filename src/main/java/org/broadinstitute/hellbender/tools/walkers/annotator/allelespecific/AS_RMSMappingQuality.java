@@ -81,7 +81,7 @@ public final class AS_RMSMappingQuality extends InfoFieldAnnotation implements A
         final ReducibleAnnotationData<Double> myData = new ReducibleAnnotationData<>(null);
         getRMSDataFromLikelihoods(likelihoods, myData);
         final String annotationString = makeRawAnnotationString(vc.getAlleles(), myData.getAttributeMap());
-        annotations.put(getRawKeyName(), annotationString);
+        annotations.put(getRawKeyNames().get(0), annotationString);
         return annotations;
     }
 
@@ -119,7 +119,7 @@ public final class AS_RMSMappingQuality extends InfoFieldAnnotation implements A
         }
         final Map<String, Object> annotations = new HashMap<>();
         String annotationString = makeRawAnnotationString(vcAlleles, combinedData.getAttributeMap());
-        annotations.put(getRawKeyName(), annotationString);
+        annotations.put(getRawKeyNames().get(0), annotationString);
         return annotations;
     }
 
@@ -157,10 +157,10 @@ public final class AS_RMSMappingQuality extends InfoFieldAnnotation implements A
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})//FIXME generics here blow up
     public Map<String, Object> finalizeRawData(final VariantContext vc, final VariantContext originalVC) {
-        if (!vc.hasAttribute(getRawKeyName())) {
+        if (!vc.hasAttribute(getRawKeyNames().get(0))) {
             return new HashMap<>();
         }
-        final String rawMQdata = vc.getAttributeAsString(getRawKeyName(),null);
+        final String rawMQdata = vc.getAttributeAsString(getRawKeyNames().get(0),null);
         if (rawMQdata == null) {
             return new HashMap<>();
         }
@@ -171,7 +171,7 @@ public final class AS_RMSMappingQuality extends InfoFieldAnnotation implements A
 
         final String annotationString = makeFinalizedAnnotationString(vc, myData.getAttributeMap());
         annotations.put(getKeyNames().get(0), annotationString);
-        annotations.put(getRawKeyName(), makeRawAnnotationString(vc.getAlleles(), myData.getAttributeMap()));
+        annotations.put(getRawKeyNames().get(0), makeRawAnnotationString(vc.getAlleles(), myData.getAttributeMap()));
         return annotations;
     }
 
@@ -180,7 +180,7 @@ public final class AS_RMSMappingQuality extends InfoFieldAnnotation implements A
     public List<String> getKeyNames() { return Arrays.asList(GATKVCFConstants.AS_RMS_MAPPING_QUALITY_KEY); }
 
     @Override
-    public String getRawKeyName() { return GATKVCFConstants.AS_RAW_RMS_MAPPING_QUALITY_KEY; }
+    public List<String> getRawKeyNames() { return Arrays.asList(GATKVCFConstants.AS_RAW_RMS_MAPPING_QUALITY_KEY); }
 
     private void getRMSDataFromLikelihoods(final AlleleLikelihoods<GATKRead, Allele> likelihoods, ReducibleAnnotationData<Double> myData) {
         for ( final AlleleLikelihoods<GATKRead, Allele>.BestAllele bestAllele : likelihoods.bestAllelesBreakingTies() ) {
